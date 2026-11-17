@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNO</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101820;color:white;font-family:Arial,sans-serif;min-height:100vh}
+button,input,select{font:inherit}
+button{border:0;border-radius:8px;padding:11px 18px;background:#e6b83f;color:#171717;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:hover:not(:disabled){filter:brightness(1.12)}
+input,select{padding:11px;border:1px solid #66717c;border-radius:7px;background:#202d38;color:white}
+.screen{display:none;min-height:100vh;padding:25px}
+.screen.active{display:flex}
+#home{align-items:center;justify-content:center;flex-direction:column;gap:20px}
+.logo{font-size:76px;font-weight:900;color:#f4ca43;text-shadow:4px 4px #b52b2b}
+.subtitle{color:#aebbc6;font-size:17px}
+.menu{display:flex;gap:15px;flex-wrap:wrap;justify-content:center}
+.menu button{min-width:170px;font-size:19px;padding:17px}
+.panel{background:#1d2a35;border:1px solid #40515f;border-radius:14px;padding:25px;width:min(480px,95vw)}
+.panel h2{text-align:center;margin-top:0}
+.panel input,.panel select{width:100%;margin:7px 0 13px}
+.panel button{width:100%;margin-top:8px}
+.back{background:#52616d;color:white}
+#setup,#onlineSetup,#waiting{align-items:center;justify-content:center}
+#game{display:none;flex-direction:column;gap:12px;padding:15px;max-width:1400px;margin:auto}
+#game.active{display:flex}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+#status{font-size:18px;font-weight:bold;color:#f4ce54;text-align:center;min-height:25px}
+#table{background:#176b48;border:8px solid #0b4931;border-radius:25px;min-height:390px;display:flex;flex-direction:column;justify-content:space-between;padding:15px;gap:12px}
+.opponents{display:flex;justify-content:space-around;gap:10px;flex-wrap:wrap}
+.player{background:#104b36;border:2px solid #70a78b;border-radius:10px;padding:8px 14px;text-align:center;min-width:105px}
+.player.current{border:3px solid #ffdc55;background:#176447}
+.player strong{display:block;margin-bottom:5px}
+.cardbacks{display:flex;justify-content:center;flex-wrap:wrap;gap:3px}
+.backcard{width:22px;height:34px;border-radius:5px;background:#17212a;border:2px solid white;display:flex;align-items:center;justify-content:center;color:#f2ca43;font-size:11px;font-weight:bold}
+.center{display:flex;align-items:center;justify-content:center;gap:35px;min-height:135px}
+.deck{width:76px;height:112px;border-radius:12px;background:#202b35;border:4px solid white;display:flex;align-items:center;justify-content:center;color:#f2ca43;font-size:24px;font-weight:bold;cursor:pointer}
+.card{width:76px;height:112px;border:4px solid white;border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative;color:white;font-size:29px;font-weight:900;text-shadow:1px 2px #333;cursor:pointer;user-select:none;box-shadow:2px 3px 5px #10251c}
+.card:before{content:"";position:absolute;width:48px;height:80px;border:3px solid #ffffffaa;border-radius:50%;transform:rotate(-35deg)}
+.card span{z-index:1}
+.red{background:#d92c36}.yellow{background:#e8b72e;color:#171717;text-shadow:none}.green{background:#168b50}.blue{background:#2366c5}.wild{background:conic-gradient(#d92c36 0 25%,#e8b72e 25% 50%,#168b50 50% 75%,#2366c5 75%)}
+#handArea{background:#202d38;border-radius:14px;padding:12px}
+#handTitle{margin:0 0 10px}
+#hand{display:flex;justify-content:center;align-items:flex-end;gap:5px;flex-wrap:wrap;min-height:125px}
+#hand .card{width:65px;height:96px;font-size:24px;transition:transform .12s}
+#hand .card.selected{transform:translateY(-17px);outline:4px solid #ffe36b}
+.controls{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.secondary{background:#536575;color:white}
+.danger{background:#bd3434;color:white}
+#waitingPlayers{margin:15px 0;text-align:center;line-height:2}
+.small{font-size:13px;color:#aebbc6}
+#colorPicker{display:none;position:fixed;inset:0;background:#000b;align-items:center;justify-content:center;z-index:10}
+#colorPicker.active{display:flex}
+.colorOptions{display:flex;gap:12px;background:#1d2a35;padding:25px;border-radius:15px}
+.colorOptions button{width:65px;height:65px;border:3px solid white}
+#result{display:none;position:fixed;inset:0;background:#000c;z-index:20;align-items:center;justify-content:center}
+#result.active{display:flex}
+#result .panel{text-align:center}
+@media(max-width:600px){.logo{font-size:55px}#table{min-height:340px;padding:8px}.card{width:62px;height:94px}.center{gap:20px}.player{min-width:75px;padding:6px;font-size:13px}#hand .card{width:48px;height:74px;font-size:19px}#hand .card:before{width:30px;height:55px}}
+</style>
+</head>
+<body>
+
+<section id="home" class="screen active">
+<div class="logo">UNO</div>
+<div class="subtitle">카드를 가장 먼저 모두 내려놓아라!</div>
+<div class="menu">
+<button onclick="showScreen('setup')">AI 대전</button>
+<button onclick="showScreen('onlineSetup')">온라인 대전</button>
+</div>
+</section>
+
+<section id="setup" class="screen">
+<div class="panel">
+<h2>AI 대전 설정</h2>
+<label>전체 플레이어 수</label>
+<select id="playerCount">
+<option value="2">2명</option>
+<option value="3">3명</option>
+<option value="4" selected>4명</option>
+<option value="5">5명</option>
+</select>
+<label>AI 난이도</label>
+<select id="aiDifficulty">
+<option value="normal">일반 AI</option>
+<option value="strategic">전략 AI</option>
+</select>
+<button onclick="startAI()">게임 시작</button>
+<button class="back" onclick="showScreen('home')">뒤로</button>
+</div>
+</section>
+
+<section id="onlineSetup" class="screen">
+<div class="panel">
+<h2>온라인 대전</h2>
+<label>플레이어 이름</label>
+<input id="playerName" maxlength="12" placeholder="이름 입력">
+<label>방 코드</label>
+<input id="roomCode" maxlength="6" placeholder="참가할 방 코드">
+<button onclick="createRoom()">방 만들기</button>
+<button onclick="joinRoom()">방 참가하기</button>
+<button class="back" onclick="showScreen('home')">뒤로</button>
+<p class="small">온라인 대전은 사람끼리만 진행하며 AI는 참가하지 않습니다.</p>
+</div>
+</section>
+
+<section id="waiting" class="screen">
+<div class="panel">
+<h2>대기실</h2>
+<p>방 코드: <strong id="displayRoomCode"></strong></p>
+<div id="waitingPlayers"></div>
+<label>최대 인원</label>
+<select id="onlinePlayerCount">
+<option value="2">2명</option>
+<option value="3">3명</option>
+<option value="4" selected>4명</option>
+<option value="5">5명</option>
+</select>
+<button id="startOnlineButton" onclick="startOnlineGame()">게임 시작</button>
+<button class="back" onclick="leaveRoom()">나가기</button>
+</div>
+</section>
+
+<main id="game" class="screen">
+<div class="topbar">
+<strong id="modeLabel">UNO</strong>
+<span id="roomLabel"></span>
+<button class="secondary" onclick="goHome()">메뉴</button>
+</div>
+<div id="status">게임 시작!</div>
+<div id="table">
+<div class="opponents" id="opponents"></div>
+<div class="center">
+<div class="deck" onclick="drawCard()">UNO</div>
+<div id="topCard"></div>
+</div>
+<div class="opponents" id="lowerPlayers"></div>
+</div>
+<div id="handArea">
+<h3 id="handTitle">내 카드</h3>
+<div id="hand"></div>
+</div>
+<div class="controls">
+<button onclick="playSelected()">선택한 카드 내기</button>
+<button class="secondary" onclick="drawCard()">카드 뽑기</button>
+<button class="secondary" onclick="endTurn()">턴 종료</button>
+<button class="danger" onclick="surrender()">GG (항복)</button>
+</div>
+</main>
+
+<div id="colorPicker">
+<div class="panel">
+<h2>색상 선택</h2>
+<div class="colorOptions">
+<button class="red" onclick="chooseColor('red')"></button>
+<button class="yellow" onclick="chooseColor('yellow')"></button>
+<button class="green" onclick="chooseColor('green')"></button>
+<button class="blue" onclick="chooseColor('blue')"></button>
+</div>
+</div>
+</div>
+
+<div id="result">
+<div class="panel">
+<h2 id="resultTitle"></h2>
+<p id="resultText"></p>
+<button onclick="goHome()">메뉴로</button>
+</div>
+</div>
+
+<script>
+const firebaseConfig={
+apiKey:"YOUR_API_KEY",
+authDomain:"YOUR_PROJECT.firebaseapp.com",
+databaseURL:"https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+projectId:"YOUR_PROJECT",
+storageBucket:"YOUR_PROJECT.appspot.com",
+messagingSenderId:"YOUR_MESSAGING_SENDER_ID",
+appId:"YOUR_APP_ID"
+};
+
+let firebaseReady=false;
+let auth=null;
+let db=null;
+try{
+if(firebaseConfig.apiKey!=="YOUR_API_KEY"){
+firebase.initializeApp(firebaseConfig);
+auth=firebase.auth();
+db=firebase.database();
+firebaseReady=true;
+}
+}catch(e){console.error(e)}
+
+const COLORS={red:"#d92c36",yellow:"#e8b72e",green:"#168b50",blue:"#2366c5"};
+const COLOR_NAMES={red:"빨강",yellow:"노랑",green:"초록",blue:"파랑"};
+let mode="ai";
+let players=[];
+let hands=[];
+let deck=[];
+let discard=[];
+let current=0;
+let direction=1;
+let currentColor="";
+let selected=[];
+let pendingDraw=0;
+let pendingSkip=false;
+let gameOver=false;
+let hasDrawn=false;
+let hasPlayed=false;
+let aiDifficulty="normal";
+let playerCount=4;
+let roomId="";
+let myUid="";
+let myIndex=-1;
+let roomRef=null;
+let roomListener=null;
+let roomState=null;
+let isHost=false;
+let processing=false;
+let drawId=0;
+
+function showScreen(id){
+document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
+document.getElementById(id).classList.add("active");
+}
+
+function makeDeck(){
+let d=[];
+let id=0;
+for(const color of Object.keys(COLORS)){
+d.push({id:id++,color,value:"0"});
+for(let n=1;n<=9;n++){
+d.push({id:id++,color,value:String(n)});
+d.push({id:id++,color,value:String(n)});
+}
+for(const value of ["skip","reverse","+2"]){
+d.push({id:id++,color,value});
+d.push({id:id++,color,value});
+}
+}
+for(let i=0;i<4;i++){
+d.push({id:id++,color:"wild",value:"wild"});
+d.push({id:id++,color:"wild",value:"+4"});
+}
+return d;
+}
+
+function shuffle(a){
+for(let i=a.length-1;i>0;i--){
+const j=Math.floor(Math.random()*(i+1));
+[a[i],a[j]]=[a[j],a[i]];
+}
+return a;
+}
+
+function startAI(){
+mode="ai";
+playerCount=Number(document.getElementById("playerCount").value);
+if(!Number.isInteger(playerCount)||playerCount<2||playerCount>5){
+alert("2~5명만 가능합니다.");
+return;
+}
+aiDifficulty=document.getElementById("aiDifficulty").value;
+players=Array.from({length:playerCount},(_,i)=>i===0?"P1":"P"+(i+1));
+hands=Array.from({length:playerCount},()=>[]);
+deck=shuffle(makeDeck());
+discard=[];
+current=0;
+direction=1;
+pendingDraw=0;
+pendingSkip=false;
+selected=[];
+gameOver=false;
+hasDrawn=false;
+hasPlayed=false;
+processing=false;
+for(let i=0;i<playerCount;i++){
+const amount=playerCount===5?6:7;
+for(let j=0;j<amount;j++)hands[i].push(deck.pop());
+}
+let first=deck.pop();
+while(first.color==="wild"){
+deck.unshift(first);
+first=deck.pop();
+}
+discard.push(first);
+currentColor=first.color;
+showScreen("game");
+document.getElementById("modeLabel").textContent="AI 대전";
+document.getElementById("roomLabel").textContent="";
+document.getElementById("status").textContent="P1의 차례입니다.";
+render();
+}
+
+function cardText(c){
+if(c.value==="skip")return "금지";
+if(c.value==="reverse")return "↺";
+if(c.value==="+2")return "+2";
+if(c.value==="+4")return "+4";
+if(c.value==="wild")return "★";
+return c.value;
+}
+
+function cardElement(c,selectable=false,isSelected=false){
+const el=document.createElement("div");
+el.className="card "+(c.color==="wild"?"wild":c.color);
+if(isSelected)el.classList.add("selected");
+const span=document.createElement("span");
+span.textContent=cardText(c);
+el.appendChild(span);
+if(selectable)el.onclick=()=>toggleCard(c.id);
+return el;
+}
+
+function render(){
+if(gameOver)return;
+const top=discard[discard.length-1];
+document.getElementById("topCard").replaceChildren(cardElement({...top,color:top.color==="wild"?currentColor:top.color}));
+document.getElementById("status").textContent=(mode==="ai"?players[current]:"P"+(current+1))+"의 차례 · 현재 색상: "+COLOR_NAMES[currentColor];
+const opponents=document.getElementById("opponents");
+opponents.innerHTML="";
+const lower=document.getElementById("lowerPlayers");
+lower.innerHTML="";
+for(let i=1;i<playerCount;i++){
+const p=(i+current)%playerCount;
+const box=document.createElement("div");
+box.className="player"+(p===current?" current":"");
+box.innerHTML="<strong>"+players[p]+"</strong><span>"+hands[p].length+"장</span><div class='cardbacks'>"+Array.from({length:Math.min(hands[p].length,10)},() => "<div class='backcard'>UNO</div>").join("")+"</div>";
+(p%2?opponents:lower).appendChild(box);
+}
+if(mode==="ai"){
+const me=document.createElement("div");
+me.className="player current";
+me.innerHTML="<strong>P1 (나)</strong><span>"+hands[0].length+"장</span>";
+lower.appendChild(me);
+}
+const hand=document.getElementById("hand");
+hand.innerHTML="";
+const myCards=hands[mode==="ai"?0:myIndex]||[];
+document.getElementById("handTitle").textContent="내 카드 ("+myCards.length+"장)";
+myCards.forEach(c=>hand.appendChild(cardElement(c,true,selected.includes(c.id))));
+}
+
+function toggleCard(id){
+if(gameOver||current!==(mode==="ai"?0:myIndex))return;
+if(hasDrawn&&drawId!==id)return;
+if(selected.includes(id))selected=selected.filter(x=>x!==id);
+else selected.push(id);
+render();
+}
+
+function isPlayable(c,top=discard[discard.length-1],color=currentColor){
+return c.color==="wild"||c.color===color||c.value===top.value;
+}
+
+function refillDeck(){
+if(deck.length>0)return;
+if(discard.length<=1)return;
+const top=discard.pop();
+deck=shuffle(discard);
+discard=[top];
+}
+
+function takeCard(index){
+refillDeck();
+if(deck.length===0)return null;
+const c=deck.pop();
+hands[index].push(c);
+return c;
+}
+
+function drawCard(){
+if(gameOver||processing||current!==(mode==="ai"?0:myIndex))return;
+if(hasDrawn||hasPlayed){
+setStatus("이미 카드를 뽑았거나 카드를 냈습니다.");
+return;
+}
+const index=mode==="ai"?0:myIndex;
+const c=takeCard(index);
+if(!c){setStatus("더미에 카드가 없습니다.");return}
+hasDrawn=true;
+drawId=c.id;
+selected=[];
+setStatus("카드 1장을 뽑았습니다. 뽑은 카드를 낼 수 있습니다.");
+render();
+}
+
+function setStatus(t){
+document.getElementById("status").textContent=t;
+}
+
+function playSelected(){
+if(gameOver||processing||current!==(mode==="ai"?0:myIndex))return;
+const index=mode==="ai"?0:myIndex;
+if(selected.length===0){setStatus("낼 카드를 선택하세요.");return}
+const chosen=selected.map(id=>hands[index].find(c=>c.id===id)).filter(Boolean);
+if(chosen.length!==selected.length){selected=[];render();return}
+let testTop=discard[discard.length-1];
+let testColor=currentColor;
+for(const c of chosen){
+if(!isPlayable(c,testTop,testColor)){
+setStatus("선택한 카드 중 낼 수 없는 카드가 있습니다.");
+return;
+}
+testTop=c;
+testColor=c.color==="wild"?testColor:c.color;
+}
+if(chosen.some(c=>c.color==="wild")){
+const wild=chosen.find(c=>c.color==="wild");
+if(chosen.length!==1){
+setStatus("와일드 카드는 한 번에 한 장씩 내야 합니다.");
+return;
+}
+pendingWildCard=wild;
+document.getElementById("colorPicker").classList.add("active");
+return;
+}
+commitCards(index,chosen,null);
+}
+
+let pendingWildCard=null;
+
+function chooseColor(color){
+document.getElementById("colorPicker").classList.remove("active");
+if(!pendingWildCard)return;
+const index=mode==="ai"?0:myIndex;
+commitCards(index,[pendingWildCard],color);
+pendingWildCard=null;
+}
+
+function commitCards(index,chosen,wildColor){
+let last=null;
+for(const c of chosen){
+const pos=hands[index].findIndex(x=>x.id===c.id);
+if(pos<0)continue;
+hands[index].splice(pos,1);
+discard.push(c);
+last=c;
+if(c.color==="wild"){
+currentColor=wildColor||"red";
+}else{
+currentColor=c.color;
+}
+}
+selected=[];
+hasDrawn=false;
+drawId=0;
+hasPlayed=true;
+if(hands[index].length===0){
+finishGame(index);
+return;
+}
+if(hands[index].length===1){
+const success=Math.random()<1/playerCount;
+if(!success){
+takeCard(index);
+setStatus(players[index]+" UNO 실패! 카드 1장 추가");
+}else{
+setStatus(players[index]+" UNO 성공!");
+}
+}
+applyEffect(last);
+render();
+}
+
+function applyEffect(c){
+if(!c)return;
+if(c.value==="reverse"){
+direction*=-1;
+if(playerCount===2)pendingSkip=true;
+}
+if(c.value==="skip")pendingSkip=true;
+if(c.value==="+2")pendingDraw=2;
+if(c.value==="+4")pendingDraw=4;
+}
+
+function endTurn(){
+if(gameOver||processing||current!==(mode==="ai"?0:myIndex))return;
+if(!hasDrawn&&!hasPlayed){
+setStatus("카드를 내거나 한 장 뽑아야 턴을 종료할 수 있습니다.");
+return;
+}
+selected=[];
+hasDrawn=false;
+hasPlayed=false;
+drawId=0;
+advanceTurn();
+}
+
+function advanceTurn(){
+let steps=1;
+if(pendingSkip){steps++;pendingSkip=false}
+let next=(current+direction*steps+playerCount*10)%playerCount;
+if(pendingDraw>0){
+const amount=pendingDraw;
+pendingDraw=0;
+for(let i=0;i<amount;i++)takeCard(next);
+setStatus(players[next]+"에게 "+amount+"장의 카드가 추가되었습니다.");
+next=(next+direction+playerCount*10)%playerCount;
+}
+current=next;
+selected=[];
+hasDrawn=false;
+hasPlayed=false;
+drawId=0;
+render();
+if(mode==="ai"&&current!==0&&!gameOver){
+processing=true;
+setTimeout(aiTurn,1400);
+}
+}
+
+function aiChoose(){
+const hand=hands[current];
+const top=discard[discard.length-1];
+let options=hand.filter(c=>isPlayable(c,top,currentColor));
+if(options.length===0)return null;
+if(aiDifficulty==="normal")return options[Math.floor(Math.random()*options.length)];
+options.sort((a,b)=>{
+const score=c=>{
+let s=0;
+if(c.color===currentColor)s+=2;
+if(c.value==="skip"||c.value==="reverse")s+=4;
+if(c.value==="+2")s+=5;
+if(c.value==="+4")s+=3;
+if(c.color==="wild")s-=2;
+return s;
+};
+return score(b)-score(a);
+});
+return options[0];
+}
+
+function aiTurn(){
+if(gameOver||mode!=="ai")return;
+if(current===0){processing=false;return}
+const c=aiChoose();
+if(!c){
+takeCard(current);
+setStatus(players[current]+"이 카드를 뽑았습니다.");
+setTimeout(()=>{
+processing=false;
+advanceTurn();
+},1800);
+return;
+}
+let wildColor=null;
+if(c.color==="wild"){
+const counts={red:0,yellow:0,green:0,blue:0};
+hands[current].forEach(x=>{if(counts[x.color]!==undefined)counts[x.color]++});
+wildColor=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+}
+commitCards(current,[c],wildColor);
+if(gameOver){processing=false;return}
+setTimeout(()=>{
+processing=false;
+advanceTurn();
+},1800);
+}
+
+function finishGame(index){
+gameOver=true;
+processing=false;
+const winner=typeof index==="number"?players[index]:index;
+document.getElementById("resultTitle").textContent="게임 종료";
+document.getElementById("resultText").textContent=winner+" 승리!";
+document.getElementById("result").classList.add("active");
+}
+
+function surrender(){
+if(gameOver)return;
+if(!confirm("정말 항복하시겠습니까?"))return;
+finishGame(mode==="ai"?"AI 승리":"상대 플레이어 승리");
+}
+
+function goHome(){
+if(roomListener&&roomRef)roomRef.off("value",roomListener);
+roomListener=null;
+roomRef=null;
+roomId="";
+gameOver=true;
+document.getElementById("result").classList.remove("active");
+showScreen("home");
+}
+
+function createCode(){
+return Math.random().toString(36).substring(2,8).toUpperCase();
+}
+
+async function ensureLogin(){
+if(!firebaseReady)throw new Error("Firebase 설정을 먼저 입력해야 합니다.");
+const result=await auth.signInAnonymously();
+myUid=result.user.uid;
+}
+
+async function createRoom(){
+try{
+await ensureLogin();
+const name=document.getElementById("playerName").value.trim()||"플레이어";
+roomId=createCode();
+roomRef=db.ref("unoRooms/"+roomId);
+isHost=true;
+myIndex=0;
+const room={
+hostUid:myUid,
+status:"waiting",
+maxPlayers:4,
+players:{[myUid]:{name,seat:0,connected:true}},
+game:null
+};
+await roomRef.set(room);
+document.getElementById("displayRoomCode").textContent=roomId;
+document.getElementById("onlinePlayerCount").disabled=false;
+listenRoom();
+showScreen("waiting");
+}catch(e){alert("방 생성 실패: "+e.message)}
+}
+
+async function joinRoom(){
+try{
+await ensureLogin();
+const code=document.getElementById("roomCode").value.trim().toUpperCase();
+if(!code){alert("방 코드를 입력하세요.");return}
+roomId=code;
+roomRef=db.ref("unoRooms/"+roomId);
+const snap=await roomRef.get();
+if(!snap.exists()){alert("존재하지 않는 방입니다.");return}
+const room=snap.val();
+if(room.status!=="waiting"){alert("이미 게임이 시작된 방입니다.");return}
+const entries=Object.entries(room.players||{});
+if(entries.length>=room.maxPlayers){alert("방이 가득 찼습니다.");return}
+if(room.players&&room.players[myUid]){alert("이미 참가한 방입니다.");return}
+const seat=entries.length;
+const name=document.getElementById("playerName").value.trim()||"플레이어";
+await roomRef.child("players/"+myUid).set({name,seat,connected:true});
+isHost=false;
+myIndex=seat;
+document.getElementById("displayRoomCode").textContent=roomId;
+document.getElementById("onlinePlayerCount").disabled=true;
+listenRoom();
+showScreen("waiting");
+}catch(e){alert("방 참가 실패: "+e.message)}
+}
+
+function listenRoom(){
+if(roomListener&&roomRef)roomRef.off("value",roomListener);
+roomListener=snap=>{
+if(!snap.exists()){setStatus("방이 삭제되었습니다.");return}
+roomState=snap.val();
+const entries=Object.entries(roomState.players||{}).sort((a,b)=>a[1].seat-b[1].seat);
+if(roomState.status==="waiting"){
+document.getElementById("waitingPlayers").innerHTML=entries.map((x,i)=>(i+1)+". "+escapeHtml(x[1].name)).join("<br>");
+document.getElementById("startOnlineButton").style.display=isHost?"block":"none";
+if(isHost)document.getElementById("onlinePlayerCount").value=roomState.maxPlayers||4;
+}
+if(roomState.status==="playing"){
+mode="online";
+players=roomState.game.players;
+hands=roomState.game.hands;
+deck=roomState.game.deck;
+discard=roomState.game.discard;
+current=roomState.game.current;
+direction=roomState.game.direction;
+currentColor=roomState.game.currentColor;
+pendingDraw=roomState.game.pendingDraw||0;
+pendingSkip=roomState.game.pendingSkip||false;
+gameOver=roomState.game.gameOver||false;
+myIndex=roomState.players[myUid].seat;
+showScreen("game");
+document.getElementById("modeLabel").textContent="온라인 대전";
+document.getElementById("roomLabel").textContent="방 코드: "+roomId;
+renderOnline();
+}
+};
+roomRef.on("value",roomListener);
+}
+
+function escapeHtml(s){
+return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function startOnlineGame(){
+if(!isHost||!roomState)return;
+const entries=Object.entries(roomState.players||{}).sort((a,b)=>a[1].seat-b[1].seat);
+const count=Number(document.getElementById("onlinePlayerCount").value);
+if(entries.length<2){alert("최소 2명이 참가해야 합니다.");return}
+if(entries.length>count){alert("현재 참가 인원이 설정한 인원보다 많습니다.");return}
+const d=shuffle(makeDeck());
+const h=entries.map(()=>[]);
+for(let i=0;i<entries.length;i++){
+for(let j=0;j<(entries.length===5?6:7);j++)h[i].push(d.pop());
+}
+let first=d.pop();
+while(first.color==="wild"){d.unshift(first);first=d.pop()}
+const game={
+players:entries.map((x,i)=>"P"+(i+1)),
+hands:h,
+deck:d,
+discard:[first],
+current:0,
+direction:1,
+currentColor:first.color,
+pendingDraw:0,
+pendingSkip:false,
+gameOver:false
+};
+await roomRef.update({status:"playing",maxPlayers:count,game});
+}
+
+function renderOnline(){
+if(gameOver)return;
+const g=roomState.game;
+const top=discard[discard.length-1];
+document.getElementById("topCard").replaceChildren(cardElement({...top,color:top.color==="wild"?currentColor:top.color}));
+setStatus("P"+(current+1)+"의 차례 · 현재 색상: "+COLOR_NAMES[currentColor]);
+const opponents=document.getElementById("opponents");
+opponents.innerHTML="";
+const lower=document.getElementById("lowerPlayers");
+lower.innerHTML="";
+for(let i=0;i<players.length;i++){
+const box=document.createElement("div");
+box.className="player"+(i===current?" current":"");
+box.innerHTML="<strong>P"+(i+1)+(i===myIndex?" (나)":"")+"</strong><span>"+hands[i].length+"장</span>";
+if(i!==myIndex)box.innerHTML+="<div class='cardbacks'>"+Array.from({length:Math.min(hands[i].length,10)},() => "<div class='backcard'>UNO</div>").join("")+"</div>";
+(i%2?opponents:lower).appendChild(box);
+}
+const hand=document.getElementById("hand");
+hand.innerHTML="";
+hands[myIndex].forEach(c=>hand.appendChild(cardElement(c,true,selected.includes(c.id))));
+document.getElementById("handTitle").textContent="내 카드 ("+hands[myIndex].length+"장)";
+}
+
+async function saveOnlineGame(){
+if(!roomRef||!roomState)return;
+const game={
+players,hands,deck,discard,current,direction,currentColor,
+pendingDraw,pendingSkip,gameOver
+};
+await roomRef.child("game").set(game);
+}
+
+function onlineMyTurn(){
+return mode==="online"&&current===myIndex&&!gameOver;
+}
+
+async function onlineDraw(){
+if(!onlineMyTurn()||hasDrawn||hasPlayed)return;
+const c=takeCard(myIndex);
+if(!c)return;
+hasDrawn=true;
+drawId=c.id;
+await saveOnlineGame();
+renderOnline();
+}
+
+async function onlinePlay(){
+if(!onlineMyTurn()||selected.length===0)return;
+const chosen=selected.map(id=>hands[myIndex].find(c=>c.id===id)).filter(Boolean);
+if(chosen.length!==selected.length)return;
+let top=discard[discard.length-1];
+let color=currentColor;
+for(const c of chosen){
+if(!isPlayable(c,top,color)){setStatus("낼 수 없는 카드가 포함되어 있습니다.");return}
+top=c;
+color=c.color==="wild"?color:c.color;
+}
+if(chosen.some(c=>c.color==="wild")){
+if(chosen.length!==1){setStatus("와일드 카드는 한 장씩 내야 합니다.");return}
+pendingWildCard=chosen[0];
+document.getElementById("colorPicker").classList.add("active");
+return;
+}
+await onlineCommit(chosen,null);
+}
+
+async function onlineCommit(chosen,wildColor){
+for(const c of chosen){
+const pos=hands[myIndex].findIndex(x=>x.id===c.id);
+if(pos<0)continue;
+hands[myIndex].splice(pos,1);
+discard.push(c);
+currentColor=c.color==="wild"?(wildColor||"red"):c.color;
+}
+selected=[];
+hasDrawn=false;
+drawId=0;
+hasPlayed=true;
+if(hands[myIndex].length===0){
+gameOver=true;
+await saveOnlineGame();
+document.getElementById("resultTitle").textContent="게임 종료";
+document.getElementById("resultText").textContent="P"+(myIndex+1)+" 승리!";
+document.getElementById("result").classList.add("active");
+return;
+}
+if(hands[myIndex].length===1&&!hasUnoChecked){
+hasUnoChecked=true;
+if(Math.random()>=1/players.length)takeCard(myIndex);
+}
+applyEffect(chosen[chosen.length-1]);
+await saveOnlineGame();
+renderOnline();
+}
+
+let hasUnoChecked=false;
+
+async function onlineEndTurn(){
+if(!onlineMyTurn()||(!hasDrawn&&!hasPlayed))return;
+hasDrawn=false;
+hasPlayed=false;
+hasUnoChecked=false;
+selected=[];
+let steps=1;
+if(pendingSkip){steps++;pendingSkip=false}
+let next=(current+direction*steps+players.length*10)%players.length;
+if(pendingDraw>0){
+const n=pendingDraw;
+pendingDraw=0;
+for(let i=0;i<n;i++)takeCard(next);
+next=(next+direction+players.length*10)%players.length;
+}
+current=next;
+await saveOnlineGame();
+renderOnline();
+}
+
+async function leaveRoom(){
+if(roomRef&&myUid){
+await roomRef.child("players/"+myUid).remove();
+if(roomListener)roomRef.off("value",roomListener);
+}
+goHome();
+}
+
+const oldToggleCard=toggleCard;
+toggleCard=function(id){
+if(mode==="online"){
+if(!onlineMyTurn())return;
+if(hasDrawn&&drawId!==id)return;
+if(selected.includes(id))selected=selected.filter(x=>x!==id);
+else selected.push(id);
+renderOnline();
+}else oldToggleCard(id);
+};
+
+const oldDrawCard=drawCard;
+drawCard=function(){
+if(mode==="online"){onlineDraw();return}
+oldDrawCard();
+};
+
+const oldPlaySelected=playSelected;
+playSelected=function(){
+if(mode==="online"){onlinePlay();return}
+oldPlaySelected();
+};
+
+const oldEndTurn=endTurn;
+endTurn=function(){
+if(mode==="online"){onlineEndTurn();return}
+oldEndTurn();
+};
+
+const oldChooseColor=chooseColor;
+chooseColor=function(color){
+if(mode==="online"&&pendingWildCard){
+document.getElementById("colorPicker").classList.remove("active");
+onlineCommit([pendingWildCard],color);
+pendingWildCard=null;
+return;
+}
+oldChooseColor(color);
+};
+
+const oldRender=render;
+render=function(){
+if(mode==="online"){renderOnline();return}
+oldRender();
+};
+
+const oldSurrender=surrender;
+surrender=function(){
+if(mode==="online"){
+if(!confirm("정말 항복하시겠습니까?"))return;
+gameOver=true;
+saveOnlineGame();
+document.getElementById("resultTitle").textContent="게임 종료";
+document.getElementById("resultText").textContent="P"+(myIndex+1)+" 항복";
+document.getElementById("result").classList.add("active");
+return;
+}
+oldSurrender();
+};
+</script>
+</body>
+</html>
