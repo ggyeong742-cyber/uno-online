@@ -650,36 +650,82 @@ showScreen("waiting");
 }
 
 function listenRoom(){
-if(roomListener&&roomRef)roomRef.off("value",roomListener);
-roomListener=snap=>{
-if(!snap.exists()){setStatus("방이 삭제되었습니다.");return}
-roomState=snap.val();
-const entries=Object.entries(roomState.players||{}).sort((a,b)=>a[1].seat-b[1].seat);
-if(roomState.status==="waiting"){
-document.getElementById("waitingPlayers").innerHTML=entries.map((x,i)=>(i+1)+". "+escapeHtml(x[1].name)).join("<br>");
-document.getElementById("startOnlineButton").style.display=isHost?"block":"none";
-if(isHost)document.getElementById("onlinePlayerCount").value=roomState.maxPlayers||4;
-}
-if(roomState.status==="playing"){
-mode="online";
-players=roomState.game.players;
-hands=roomState.game.hands;
-deck=roomState.game.deck;
-discard=roomState.game.discard;
-current=roomState.game.current;
-direction=roomState.game.direction;
-currentColor=roomState.game.currentColor;
-pendingDraw=roomState.game.pendingDraw||0;
-pendingSkip=roomState.game.pendingSkip||false;
-gameOver=roomState.game.gameOver||false;
-myIndex=roomState.players[myUid].seat;
-showScreen("game");
-document.getElementById("modeLabel").textContent="온라인 대전";
-document.getElementById("roomLabel").textContent="방 코드: "+roomId;
-renderOnline();
-}
-};
-roomRef.on("value",roomListener);
+  if(roomListener&&roomRef){
+    roomRef.off("value",roomListener);
+  }
+
+  roomListener=snap=>{
+    if(!snap.exists()){
+      alert("방이 삭제되었습니다.");
+      goHome();
+      return;
+    }
+
+    roomState=snap.val();
+
+    const entries=Object.entries(
+      roomState.players||{}
+    ).sort((a,b)=>a[1].seat-b[1].seat);
+
+    if(!roomState.players || !roomState.players[myUid]){
+      alert("방에서 나갔거나 참가자 정보가 없습니다.");
+      goHome();
+      return;
+    }
+
+    if(roomState.status==="waiting"){
+      showScreen("waiting");
+
+      document.getElementById("waitingPlayers").innerHTML=
+        entries.map((x,i)=>
+          (i+1)+". "+escapeHtml(x[1].name)
+        ).join("<br>");
+
+      document.getElementById("startOnlineButton").style.display=
+        isHost?"block":"none";
+
+      if(isHost){
+        document.getElementById("onlinePlayerCount").value=
+          roomState.maxPlayers||4;
+      }
+
+      return;
+    }
+
+    if(roomState.status==="playing" && roomState.game){
+      mode="online";
+
+      players=roomState.game.players;
+      hands=roomState.game.hands;
+      deck=roomState.game.deck;
+      discard=roomState.game.discard;
+      current=roomState.game.current;
+      direction=roomState.game.direction;
+      currentColor=roomState.game.currentColor;
+      pendingDraw=roomState.game.pendingDraw||0;
+      pendingSkip=roomState.game.pendingSkip||false;
+      gameOver=roomState.game.gameOver||false;
+
+      myIndex=roomState.players[myUid].seat;
+
+      if(myIndex<0 || myIndex>=players.length){
+        alert("참가자 좌석 정보가 올바르지 않습니다.");
+        return;
+      }
+
+      showScreen("game");
+
+      document.getElementById("modeLabel").textContent=
+        "온라인 대전";
+
+      document.getElementById("roomLabel").textContent=
+        "방 코드: "+roomId;
+
+      renderOnline();
+    }
+  };
+
+  roomRef.on("value",roomListener);
 }
 
 function escapeHtml(s){
@@ -687,31 +733,69 @@ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"
 }
 
 async function startOnlineGame(){
-if(!isHost||!roomState)return;
-const entries=Object.entries(roomState.players||{}).sort((a,b)=>a[1].seat-b[1].seat);
-const count=Number(document.getElementById("onlinePlayerCount").value);
-if(entries.length<2){alert("최소 2명이 참가해야 합니다.");return}
-if(entries.length>count){alert("현재 참가 인원이 설정한 인원보다 많습니다.");return}
-const d=shuffle(makeDeck());
-const h=entries.map(()=>[]);
-for(let i=0;i<entries.length;i++){
-for(let j=0;j<(entries.length===5?6:7);j++)h[i].push(d.pop());
-}
-let first=d.pop();
-while(first.color==="wild"){d.unshift(first);first=d.pop()}
-const game={
-players:entries.map((x,i)=>"P"+(i+1)),
-hands:h,
-deck:d,
-discard:[first],
-current:0,
-direction:1,
-currentColor:first.color,
-pendingDraw:0,
-pendingSkip:false,
-gameOver:false
-};
-await roomRef.update({status:"playing",maxPlayers:count,game});
+  if(!isHost || !roomState)return;
+
+  const entries=Object.entries(roomState.players||{})
+    .sort((a,b)=>a[1].seat-b[1].seat);
+
+  const count=Number(
+    document.getElementById("onlinePlayerCount").value
+  );
+
+  if(entries.length<2){
+    alert("최소 2명이 참가해야 합니다.");
+    return;
+  }
+
+  if(entries.length>count){
+    alert("현재 참가 인원이 설정한 인원보다 많습니다.");
+    return;
+  }
+
+  const button=document.getElementById("startOnlineButton");
+  button.disabled=true;
+
+  try{
+    const d=shuffle(makeDeck());
+    const h=entries.map(()=>[]);
+
+    for(let i=0;i<entries.length;i++){
+      for(let j=0;j<7;j++){
+        h[i].push(d.pop());
+      }
+    }
+
+    let first=d.pop();
+
+    while(first.color==="wild"){
+      d.unshift(first);
+      first=d.pop();
+    }
+
+    const game={
+      players:entries.map(x=>x[1].name),
+      hands:h,
+      deck:d,
+      discard:[first],
+      current:0,
+      direction:1,
+      currentColor:first.color,
+      pendingDraw:0,
+      pendingSkip:false,
+      gameOver:false
+    };
+
+    await roomRef.child("maxPlayers").set(count);
+
+    await roomRef.update({
+      status:"playing",
+      game:game
+    });
+
+  }catch(e){
+    alert("게임 시작 실패: "+e.message);
+    button.disabled=false;
+  }
 }
 
 function renderOnline(){
